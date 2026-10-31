@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam Buddy Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#2f4fd8">
+<meta name="description" content="Turn long answers into short, easy notes. Read aloud and practise. Works offline.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Exam Buddy">
+<meta property="og:title" content="Exam Buddy Notes">
+<meta property="og:description" content="Turn long answers into short, easy notes. Read aloud and practise before exams.">
+<meta property="og:image" content="icon-512.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+/* Layout idea: a revision desk. Left: put notes in and check the text. Right: crisp cards, then a practice zone. Everything runs on this device. */
+:root{
+  --bg:#f3f5fb; --paper:#ffffff; --ink:#1b2340; --muted:#5b6485; --line:#dde2f0;
+  --accent:#2f4fd8; --accent-ink:#ffffff; --hl:#ffe45c; --hl-soft:#fff6c2;
+  --good:#1f9d5a; --good-soft:#e2f6ea; --bad:#d6453d; --bad-soft:#fde6e4;
+  --font-display:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --font-body:"Nunito","Segoe UI",system-ui,sans-serif;
+  --r:14px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121628; --paper:#1b2038; --ink:#eef0fa; --muted:#a3aac6; --line:#2d3456;
+    --accent:#7d94ff; --accent-ink:#0f1430; --hl:#f2cf3a; --hl-soft:#3a3420;
+    --good:#4fd18b; --good-soft:#163527; --bad:#ff7a70; --bad-soft:#3d1d1c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121628; --paper:#1b2038; --ink:#eef0fa; --muted:#a3aac6; --line:#2d3456;
+  --accent:#7d94ff; --accent-ink:#0f1430; --hl:#f2cf3a; --hl-soft:#3a3420;
+  --good:#4fd18b; --good-soft:#163527; --bad:#ff7a70; --bad-soft:#3d1d1c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55}
+h1,h2,h3{font-family:var(--font-display);line-height:1.15;text-wrap:balance;margin:0}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px;display:grid;gap:20px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+header.top h1{font-size:clamp(28px,4vw,40px);font-weight:800}
+header.top h1 mark{background:linear-gradient(transparent 55%,var(--hl) 55%);color:inherit;padding:0 4px}
+header.top p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.grid{display:grid;grid-template-columns:minmax(300px,400px) 1fr;gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:14px}
+.panel h2{font-size:22px}
+.step{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:14px;font-weight:800;margin-right:8px;vertical-align:2px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;display:grid;gap:6px}
+.drop:hover,.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.drop strong{font-size:17px}
+.drop span{color:var(--muted);font-size:14px}
+label.lbl{font-weight:700;font-size:14px;display:block;margin-bottom:4px}
+textarea,select,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+textarea{min-height:200px;resize:vertical;line-height:1.5}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+.btn{border:0;border-radius:12px;padding:11px 16px;font-weight:800;cursor:pointer;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.big{font-size:17px;padding:14px 18px;width:100%}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{border-color:var(--accent)}
+.btn.sm{padding:7px 11px;font-size:14px;border-radius:10px}
+.btn.hl{background:var(--hl);color:#1b2340}
+.status{font-size:14px;color:var(--muted);min-height:1.2em}
+.status.err{color:var(--bad);font-weight:700}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.speed{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.speed input{width:90px}
+.result-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between}
+.result-head h2{font-size:26px}
+.sample-tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:var(--hl);color:#1b2340;border-radius:6px;padding:2px 8px;vertical-align:4px;margin-left:8px}
+.cards{display:grid;gap:14px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:grid;gap:10px}
+.card.speaking{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.card h3{font-size:20px}
+.card .num{font-family:var(--font-display);color:var(--accent);font-weight:800;margin-right:6px}
+.card .short{font-size:17px;font-weight:700;margin:0}
+.card ul{margin:0;padding-left:20px;display:grid;gap:3px}
+.card b.k{background:var(--hl-soft);padding:0 3px;border-radius:4px}
+[contenteditable="true"]{outline:1px dashed var(--accent);outline-offset:3px;border-radius:4px}
+.trick{background:var(--hl-soft);border-radius:10px;padding:8px 12px;font-size:15px}
+.trick b{font-family:var(--font-display)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:700;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+.card-actions{display:flex;flex-wrap:wrap;gap:6px}
+.iconbtn{border:1px solid var(--line);background:transparent;border-radius:10px;padding:6px 10px;cursor:pointer;font-size:14px;font-weight:700}
+.iconbtn:hover{border-color:var(--accent)}
+.hidden{display:none !important}
+.practice-q{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
+.qtype{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.qtext{font-weight:700;font-size:17px}
+.opts{display:grid;gap:6px}
+.opt{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;cursor:pointer}
+.opt:hover{border-color:var(--accent)}
+.opt.right{background:var(--good-soft);border-color:var(--good);font-weight:700}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad)}
+.answer{background:var(--good-soft);border-radius:10px;padding:9px 12px;font-size:15px}
+.match{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.match select{padding:6px 8px}
+.score{font-family:var(--font-display);font-size:20px;font-weight:700}
+.saved-item{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:14px}
+.saved-item button.link{background:none;border:0;padding:0;text-align:left;cursor:pointer;font-weight:700;color:var(--accent);flex:1}
+.spin{width:16px;height:16px;border:3px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;display:inline-block;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation-duration:3s}*{transition:none !important}}
+.flash{display:grid;gap:12px;justify-items:center;text-align:center}
+.flashcard{width:100%;min-height:200px;border-radius:var(--r);border:1px solid var(--line);background:var(--paper);padding:22px;display:grid;place-items:center;cursor:pointer;font-size:19px}
+.flashcard.back{background:var(--hl-soft)}
+footer{color:var(--muted);font-size:13px;text-align:center}
+@media print{
+  header.top .toolbar, aside, #practiceSec, .card-actions, .result-head .toolbar, footer{display:none !important}
+  .grid{grid-template-columns:1fr} body{background:#fff} .card{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Exam Buddy <mark>Notes</mark></h1>
+      <p>Turn long answers into short points, listen to them, and practise. No AI, no account, no sign-up. Everything stays on this device.</p>
+    </div>
+    <div class="toolbar">
+      <span class="speed"><label for="rate">Voice speed</label><input id="rate" type="range" min="0.6" max="1.4" step="0.1" value="0.9"></span>
+      <select id="voice" aria-label="Voice" style="width:auto;max-width:200px"></select>
+      <button class="btn sm hl hidden" id="installBtn">Install app</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <aside class="panel" aria-labelledby="h-in">
+      <h2 id="h-in"><span class="step">1</span>Add your notes</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload photos or PDF of notes">
+        <strong>Tap to upload photos or PDF</strong>
+        <span>Printed notes and neat handwriting work best. The text appears in the box below so you can fix any mistakes. Works offline after the first visit (photo reading needs internet the first time).</span>
+      </div>
+      <input type="file" id="file" accept="image/*,application/pdf" multiple class="hidden">
+      <div class="row">
+        <div>
+          <label class="lbl" for="ocrLang">Text in the photo is</label>
+          <select id="ocrLang"><option value="eng" selected>English</option><option value="hin">Hindi</option><option value="eng+hin">English + Hindi</option></select>
+        </div>
+        <div>
+          <label class="lbl" for="len">How short?</label>
+          <select id="len"><option value="2">Super short (2 points)</option><option value="3" selected>Short (3 points)</option><option value="5">Exam-ready (5 points)</option></select>
+        </div>
+      </div>
+      <div class="bar hidden" id="bar"><i></i></div>
+      <div class="status" id="ocrStatus" role="status" aria-live="polite"></div>
+      <div>
+        <label class="lbl" for="src">Notes text (check and fix it here)</label>
+        <textarea id="src" placeholder="Paste or type here. Start each question on a new line, e.g.
+Q1. What is photosynthesis?
+Photosynthesis is the process by which..."></textarea>
+        <p class="hint">Tip: start each question with "Q" or a number, or end it with "?". The app finds each question and its answer from that.</p>
+      </div>
+      <button class="btn big" id="goBtn">Make easy notes</button>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <div id="savedWrap" class="hidden" style="display:grid;gap:8px">
+        <h2 style="font-size:18px">Saved notes</h2>
+        <div id="savedList" style="display:grid;gap:6px"></div>
+      </div>
+    </aside>
+
+    <main style="display:grid;gap:16px;min-width:0">
+      <section class="panel" aria-labelledby="h-out">
+        <div class="result-head">
+          <h2 id="h-out"><span class="step">2</span><span id="notesTitle">Easy notes</span><span class="sample-tag" id="sampleTag">Example</span></h2>
+          <div class="toolbar">
+            <button class="btn sm" id="readAll">Read all aloud</button>
+            <button class="btn sm ghost hidden" id="stopRead">Stop</button>
+            <button class="btn sm ghost" id="flashBtn">Flash cards</button>
+            <button class="btn sm ghost" id="editBtn">Edit notes</button>
+            <button class="btn sm ghost" id="copyBtn">Copy</button>
+            <button class="btn sm ghost" id="printBtn">Print</button>
+            <button class="btn sm ghost" id="saveBtn">Save</button>
+          </div>
+        </div>
+        <div class="cards" id="cards"></div>
+        <div class="flash hidden" id="flash">
+          <div class="qtype" id="flashCount"></div>
+          <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Flip card"></div>
+          <div class="toolbar">
+            <button class="btn sm ghost" id="fPrev">Previous</button>
+            <button class="btn sm hl" id="fFlip">Flip</button>
+            <button class="btn sm ghost" id="fNext">Next</button>
+            <button class="btn sm ghost" id="fRead">Read aloud</button>
+            <button class="btn sm ghost" id="fClose">Back to notes</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="practiceSec" aria-labelledby="h-pr">
+        <h2 id="h-pr"><span class="step">3</span>Practise before the exam</h2>
+        <div class="row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+          <div><label class="lbl" for="pCount">How many questions</label><select id="pCount"><option>5</option><option selected>8</option><option>12</option></select></div>
+          <div><label class="lbl" for="pType">Question type</label>
+            <select id="pType"><option value="mix" selected>Mix of everything</option><option value="mcq">MCQs</option><option value="fill">Fill in the blanks</option><option value="tf">True / False</option><option value="short">Write the answer</option><option value="match">Match the following</option></select></div>
+          <div><label class="lbl" for="pTopic">Topic</label><select id="pTopic"><option value="all">All topics</option></select></div>
+        </div>
+        <button class="btn" id="practiceBtn">Make practice questions</button>
+        <div class="status" id="pStatus" role="status" aria-live="polite"></div>
+        <div class="score hidden" id="score"></div>
+        <div class="cards" id="practice"></div>
+      </section>
+    </main>
+  </div>
+  <footer>Tip: listen once, close your eyes and say the points yourself, then try the practice questions. Tap "New questions" for a fresh set every time.</footer>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+/* =========================================================
+   1. Reading photos and PDFs (on this device)
+   ========================================================= */
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const drop = $("drop"), fileIn = $("file");
+drop.onclick = () => fileIn.click();
+drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); } };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); readFiles([...e.dataTransfer.files]); };
+fileIn.onchange = () => { readFiles([...fileIn.files]); fileIn.value = ""; };
+
+let tWorker = null, tLang = null;
+async function ocr(imageSource, onP){
+  if (!window.Tesseract) throw new Error("reader");
+  const lang = $("ocrLang").value;
+  if (!tWorker || tLang !== lang) {
+    if (tWorker) await tWorker.terminate();
+    tWorker = await Tesseract.createWorker(lang.split("+"), 1, { logger: m => { if (m.status === "recognizing text") onP(m.progress); } });
+    tLang = lang;
+  }
+  const { data } = await tWorker.recognize(imageSource);
+  return data.text;
+}
+function setBar(p){ $("bar").classList.remove("hidden"); $("bar").firstElementChild.style.width = Math.round(p * 100) + "%"; }
+async function readFiles(files){
+  const st = $("ocrStatus"); st.classList.remove("err");
+  let out = "";
+  try {
+    for (let f = 0; f < files.length; f++) {
+      const file = files[f], tag = files.length > 1 ? ` (file ${f + 1} of ${files.length})` : "";
+      if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+        if (!window.pdfjsLib) throw new Error("pdf");
+        const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+        const n = Math.min(pdf.numPages, 30);
+        for (let p = 1; p <= n; p++) {
+          const page = await pdf.getPage(p);
+          const tc = await page.getTextContent();
+          let txt = "", lastY = null;
+          for (const it of tc.items) {
+            const y = it.transform[5];
+            if (lastY !== null && Math.abs(y - lastY) > 4) txt += "\n";
+            else if (txt && !/\s$/.test(txt) && it.str && !/^\s/.test(it.str)) txt += " ";
+            txt += it.str; if (it.hasEOL) txt += "\n";
+            lastY = y;
+          }
+          txt = txt.replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").trim();
+          if (txt.length > 60) { out += txt + "\n\n"; st.innerHTML = `<span class="spin"></span> Reading PDF page ${p} of ${n}${tag}`; setBar(p / n); }
+          else {
+            st.innerHTML = `<span class="spin"></span> Reading scanned page ${p} of ${n}${tag}… (first time takes longer)`;
+            const vp = page.getViewport({ scale: 2 });
+            const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+            await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+            out += await ocr(c, pr => setBar((p - 1 + pr) / n)) + "\n\n";
+          }
+        }
+      } else if (file.type.startsWith("image/")) {
+        st.innerHTML = `<span class="spin"></span> Reading the photo${tag}… (first time takes longer)`;
+        out += await ocr(await prepImage(file), setBar) + "\n\n";
+      }
+    }
+    out = cleanOcr(out);
+    const box = $("src");
+    box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + out.trim();
+    st.textContent = out.trim() ? "Done. Check the text below, fix any wrong words, then tap Make easy notes." : "No text found. Try a clearer, brighter photo taken straight from above.";
+  } catch (e) {
+    st.textContent = "Couldn't read that file. Check the internet connection (needed to load the photo reader), or try a clearer JPG or PNG photo.";
+    st.classList.add("err");
+  } finally { setTimeout(() => $("bar").classList.add("hidden"), 600); }
+}
+/* Grey + contrast boost helps the reader with photos of notebooks */
+async function prepImage(file){
+  let bmp; try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { bmp = await createImageBitmap(file); }
+  const scale = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  const g = c.getContext("2d"); g.drawImage(bmp, 0, 0, c.width, c.height);
+  const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    v = Math.max(0, Math.min(255, (v - 128) * 1.5 + 140));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  g.putImageData(im, 0, 0);
+  return c;
+}
+function cleanOcr(t){
+  return t.replace(/\r/g, "").replace(/[|¦]/g, "I").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n")
+    .replace(/(\w)-\n(\w)/g, "$1$2");
+}
+
+/* =========================================================
+   2. Making short notes (fixed rules, no AI)
+   ========================================================= */
+const STOP = new Set(("a an the and or but if then than so of to in on at by for with from into onto over under as is are was were be been being am it its this that these those there here which who whom whose what when where why how all any each few more most other some such no nor not only own same too very can will just should would could may might must shall do does did doing done have has had having i me my we our you your he him his she her they them their also about above after again against before below between both during further once out up down off while because until through per via etc e.g eg i.e ie like used use uses using called known one two three many much make makes made get gets got").split(" "));
+const GENERIC = new Set("property properties external internal object objects thing process functions function write explain describe define definition give state list differentiate difference between example examples type types important help helps helped surrounded present part parts form forms way ways thing things place takes take called main mainly various different following small large tiny also well thus hence therefore given total number answer question notes chapter class mark marks".split(" "));
+const FILLER = [
+  /\b(it is (very )?important to (note|know|remember) that|it should be noted that|we can say that|in other words|basically|actually|generally speaking|as we know|as we all know|we know that|you should know that|in simple words|that is to say|for this reason|in this way|thus we can say that)\b,?\s*/gi,
+  /\b(very|really|quite|extremely|highly|simply|just)\s+/gi
+];
+const DEF = /\b(states that|is called|are called|is known as|are known as|is defined as|are defined as|refers to|means|is the process|is a process|is a type|is the|are the|consists of|is made of)\b/i;
+
+function splitBlocks(text){
+  const lines = text.split(/\n/).map(l => l.trim());
+  const qStart = /^(q(ues(tion)?)?\s*\.?\s*\d*\s*[\.\):\-]|\d{1,2}\s*[\.\)]\s+|[ivx]{1,4}\s*[\.\)]\s+|[a-h]\s*\)\s+)/i;
+  const blocks = []; let cur = null;
+  for (const l of lines) {
+    if (!l) { if (cur) cur.a += "\n"; continue; }
+    const isQ = /^q(ues(tion)?)?\s*\.?\s*\d*\s*[\.\):\-]/i.test(l);
+    const body = l.replace(qStart, "").trim();
+    const qWord = /^(what|why|how|who|whom|when|where|which|define|explain|describe|write|give|state|list|name|mention|discuss|distinguish|differentiate|compare|draw|identify|elaborate|justify|illustrate|enumerate|outline|classify|calculate|find|prove|show|can|does|do|is|are)\b/i.test(body);
+    const looksQ = l.length < 220 && (isQ || /[?？]\s*$/.test(l) || (qStart.test(l) && qWord));
+    if (looksQ) { cur = { q: l.replace(qStart, "").replace(/^(ans(wer)?\s*[\.:\-]\s*)/i, "").trim(), a: "" }; blocks.push(cur); }
+    else if (cur) { cur.a += " " + l.replace(/^(ans(wer)?\s*[\.:\-]\s*)/i, ""); }
+    else { cur = { q: "", a: l }; blocks.push(cur); }
+  }
+  let out = blocks.filter(b => (b.q + b.a).trim());
+  /* no questions found: split long text into topics by paragraph */
+  if (out.length === 1 && !out[0].q) {
+    const paras = text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 20);
+    out = paras.map(p => ({ q: "", a: p }));
+  }
+  /* merge a question that got split across two lines */
+  out = out.filter(b => b.a.trim() || b.q.length > 3);
+  return out.map((b, i) => {
+    const a = b.a.replace(/\s+/g, " ").trim();
+    let q = b.q || topicName(a, i);
+    if (q && !/[?.:]$/.test(q) && b.q) q += "";
+    return { q, a };
+  });
+}
+function topicName(a, i){
+  const m = a.match(/^([A-Z][\w\- ]{2,40}?)\s+(is|are|was|were|refers|means)\b/);
+  if (m) return "What is " + m[1].trim() + "?";
+  const kw = keywords(a, 2);
+  return kw.length ? "About " + kw.map(cap).join(" & ") : "Topic " + (i + 1);
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function sentences(t){
+  return t.replace(/\s+/g, " ")
+    .replace(/\b(e\.g|i\.e|etc|viz|approx|no|fig|vs)\./gi, m => m.replace(".", "∯"))
+    .replace(/([.!?।])\s+/g, "$1\u0001").replace(/\s*[•●▪◦]\s*/g, "\u0001").replace(/\s+(\(?([ivx]{1,4}|\d{1,2})[\).]\s)/g, "\u0001$1")
+    .split("\u0001")
+    .map(s => s.replace(/∯/g, ".").replace(/^[\-–—*\d\.\)\(ivx\s]{0,6}(?=[A-Za-zऀ-ॿ])/, "").trim())
+    .filter(s => s.length > 3);
+}
+function words(s){ return (s.toLowerCase().match(/[a-zऀ-ॿ][a-z0-9ऀ-ॿ\-₂₃]*/g) || []); }
+function keywords(text, n){
+  const freq = {};
+  const ws = words(text);
+  const bump = (k, v) => { freq[k] = (freq[k] || 0) + v; };
+  ws.forEach((w, i) => {
+    if (STOP.has(w) || GENERIC.has(w) || w.length < 3) return;
+    let v = 1;
+    if (w.length > 7) v += 0.6;
+    if (/(sis|tion|sion|phyll|plast|ata|ide|ism|ase|ose|ity|ogy|meter|ment)$/.test(w)) v += 0.8;
+    bump(w, v);
+    const nx = ws[i + 1];
+    if (nx && !STOP.has(nx) && !GENERIC.has(nx) && nx.length > 2) bump(w + " " + nx, 1.4);
+  });
+  /* "called X", "known as X", "X is defined as" are strong signals */
+  (text.match(/\b(?:called|known as|termed|named)\s+(?:an?\s+|the\s+)?([a-z][\w\-]+(?:\s[a-z][\w\-]+)?)/gi) || [])
+    .forEach(m => { const k = m.replace(/^(called|known as|termed|named)\s+(an?\s+|the\s+)?/i, "").toLowerCase().split(" ").filter(w => !STOP.has(w)).join(" "); if (k) bump(k, 3); });
+  (text.match(/\b([A-Z]{2,}[a-z0-9]*|[A-Z][a-z]?\d[\w₂₃]*)\b/g) || []).forEach(t => bump(t.toLowerCase(), 1.5));
+  const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  const res = [];
+  for (const k of sorted) {
+    if (k.includes(" ") && freq[k] < 2.7) continue;
+    if (res.some(r => r.includes(k) || k.includes(r))) continue;
+    res.push(k); if (res.length >= n) break;
+  }
+  return res;
+}
+function compress(s, maxW = 14){
+  let t = s;
+  FILLER.forEach(r => t = t.replace(r, ""));
+  t = t.replace(/\s*\((for example|e\.g\.?|such as|like)[^)]*\)/gi, "")
+       .replace(/,?\s*(for example|for instance|such as)\b[^.;]*/i, m => m.length > 60 ? "" : m)
+       .replace(/\s+/g, " ").replace(/\s+([,.;:])/g, "$1").trim();
+  /* very long sentence: keep the main clause */
+  if (t.split(" ").length > maxW) {
+    const parts = t.split(/;|,\s|\s(?:which|so that|whereas|while)\s/);
+    let first = parts[0].trim().replace(/(\s+(in|of|on|at|by|to|for|with|from|the|a|an|and|or|that|is|are))+$/i, "");
+    if (first.split(" ").length >= 5) t = first;
+  }
+  t = t.replace(/\b(mainly|also|usually|generally|basically)\s+/gi, "");
+  t = t.replace(/[.;:,]+$/, "");
+  return cap(t);
+}
+function summarize(block, nPoints){
+  const sents = sentences(block.a);
+  if (!sents.length) return { q: block.q, short: "", points: [], keywords: [], trick: "" };
+  const kws = keywords(block.q + " " + block.a, 6); const rank = keywords(block.a, 20);
+  const qWords = new Set(words(block.q).filter(w => !STOP.has(w)));
+  const freq = {}; words(block.a).forEach(w => { if (!STOP.has(w)) freq[w] = (freq[w] || 0) + 1; });
+  const scored = sents.map((s, i) => {
+    const ws = words(s).filter(w => !STOP.has(w));
+    let sc = ws.reduce((t, w) => t + (freq[w] || 0), 0) / Math.sqrt(ws.length + 1);
+    sc += ws.filter(w => qWords.has(w)).length * 1.2;
+    if (DEF.test(s)) sc += 2.5;
+    if (/\d|=|→|->|₂/.test(s)) sc += 1;
+    if (i === 0) sc += 1.5;
+    if (ws.length < 3) sc -= 3;
+    return { s, i, sc };
+  });
+  const best = [...scored].sort((a, b) => b.sc - a.sc);
+  /* the one-line answer: matches the question, defines something, doesn't start with "This/It" */
+  const shortScore = x => {
+    const ws = words(x.s).filter(w => !STOP.has(w));
+    return ws.filter(w => qWords.has(w)).length * 2 + (DEF.test(x.s) ? 2 : 0) + (x.i === 0 ? 1.5 : 0)
+      - (/^(this|it|they|these|those|he|she|so|thus|hence|also)\b/i.test(x.s) ? 3 : 0) + x.sc * 0.3;
+  };
+  const shortS = [...scored].sort((a, b) => shortScore(b) - shortScore(a))[0];
+  const chosen = best.filter(x => x !== shortS).slice(0, nPoints).sort((a, b) => a.i - b.i);
+  let points = chosen.map(x => compress(x.s)).filter(p => p.length > 3);
+  /* if the answer was one long sentence, break it into parts */
+  if (!points.length) {
+    points = shortS.s.split(/,\s|;\s|\sand\s/).map(compress).filter(p => p.split(" ").length >= 2).slice(0, nPoints);
+    if (points.length < 2) points = [];
+  }
+  const it = { q: block.q, short: compress(shortS.s, 24), points, keywords: kws.slice(0, 5) };
+  it.trick = makeTrick(it, rank);
+  return it;
+}
+function makeTrick(it, rank){
+  const order = rank || it.keywords;
+  const used = new Set();
+  const heads = it.points.map(p => {
+    const low = p.toLowerCase();
+    let k = order.find(k => !used.has(k) && low.includes(k));
+    if (!k) { const ws = (p.match(/[A-Za-z][A-Za-z0-9₂₃\-]*/g) || []).filter(x => !STOP.has(x.toLowerCase()) && !GENERIC.has(x.toLowerCase())); k = ws.sort((a, b) => b.length - a.length)[0]; }
+    if (k) used.add(k.toLowerCase());
+    return k || "";
+  }).filter(Boolean);
+  if (heads.length >= 2) return `Remember the letters ${heads.map(h => h[0].toUpperCase()).join("-")}: ${heads.map(nice).join(", ")}.`;
+  if (it.keywords.length >= 2) return `Link the key words in a chain: ${it.keywords.map(nice).join(" → ")}.`;
+  return "";
+}
+function makeNotes(text, n){
+  buildCaseMap(text);
+  const blocks = splitBlocks(text);
+  const items = blocks.map(b => summarize(b, n)).filter(it => it.short || it.points.length);
+  const k1 = keywords(text, 1)[0];
+  const title = items.length && k1 ? nice(k1) : "My notes";
+  return { title, items };
+}
+
+/* =========================================================
+   3. Showing notes
+   ========================================================= */
+const SAMPLE_TEXT = `Q1. What is photosynthesis?
+Photosynthesis is the process by which green plants make their own food using sunlight. It takes place mainly in the leaves of the plant, inside the chloroplasts which contain a green pigment called chlorophyll. During this process carbon dioxide from the air and water from the soil are converted into glucose. Oxygen is released as a by-product into the air. Basically, it is very important to note that without photosynthesis there would be no food for animals and humans.
+
+Q2. What are stomata? Write their functions.
+Stomata are tiny pores present on the surface of leaves. Each stoma is surrounded by two guard cells which control its opening and closing. Stomata allow exchange of gases, that is carbon dioxide enters and oxygen leaves the leaf. They also help in transpiration, which is the loss of water vapour from the plant.`;
+let notes, isSample = true, editing = false;
+
+function highlight(s, kws){
+  let h = esc(s);
+  kws.slice(0, 4).forEach(k => { const r = new RegExp("\\b(" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")\\b", "i"); h = h.replace(r, '<b class="k">$1</b>'); });
+  return h;
+}
+function renderNotes(){
+  const nt = $("notesTitle"); nt.textContent = notes.title || "Easy notes";
+  nt.contentEditable = editing ? "true" : "false"; nt.oninput = () => { notes.title = nt.textContent.trim(); };
+  $("sampleTag").classList.toggle("hidden", !isSample);
+  const c = $("cards"); c.innerHTML = "";
+  if (!notes.items.length) { c.innerHTML = `<p class="hint">No notes yet. Add some text on the left and tap Make easy notes.</p>`; }
+  notes.items.forEach((it, i) => {
+    const d = document.createElement("article"); d.className = "card"; d.id = "card-" + i;
+    d.innerHTML = `
+      <h3><span class="num">${i + 1}.</span><span data-f="q">${esc(it.q)}</span></h3>
+      <p class="short" data-f="short">${editing ? esc(it.short) : highlight(it.short, it.keywords)}</p>
+      ${it.points.length ? `<ul>${it.points.map((p, j) => `<li data-f="p" data-j="${j}">${editing ? esc(p) : highlight(p, it.keywords)}</li>`).join("")}</ul>` : ""}
+      ${it.trick ? `<div class="trick"><b>Memory trick:</b> <span data-f="trick">${esc(it.trick)}</span></div>` : ""}
+      ${it.keywords.length ? `<div class="chips">${it.keywords.map(k => `<span class="chip">${esc(nice(k))}</span>`).join("")}</div>` : ""}
+      <div class="card-actions">
+        <button class="iconbtn" data-act="read">Read aloud</button>
+        <button class="iconbtn" data-act="shorter">Shorter</button>
+        <button class="iconbtn" data-act="practice">Practise this one</button>
+        ${editing ? `<button class="iconbtn" data-act="add">Add a point</button>` : ""}
+        <button class="iconbtn" data-act="del">Remove</button>
+      </div>`;
+    if (editing) d.querySelectorAll("[data-f]").forEach(el => {
+      el.contentEditable = "true";
+      el.oninput = () => {
+        const f = el.dataset.f, v = el.textContent.trim();
+        if (f === "p") it.points[+el.dataset.j] = v; else it[f] = v;
+      };
+    });
+    d.querySelector('[data-act="read"]').onclick = () => speakQueue([{ text: itemSpeech(it), el: d }]);
+    d.querySelector('[data-act="shorter"]').onclick = () => {
+      if (it.points.length > 1) it.points.pop();
+      const cut = it.short.split(/,\s| which | where | because | so that /)[0].replace(/(\s+(in|of|on|at|by|to|for|with|from|the|a|an|and|or|that))+$/i, "");
+      if (cut.split(" ").length >= 5) it.short = cut;
+      it.points = it.points.map(p => compress(p, 10));
+      it.trick = makeTrick(it); renderNotes();
+    };
+    d.querySelector('[data-act="practice"]').onclick = () => { $("pTopic").value = String(i); makePractice(); $("h-pr").scrollIntoView({ behavior: "smooth" }); };
+    d.querySelector('[data-act="add"]')?.addEventListener("click", () => { it.points.push("New point"); renderNotes(); });
+    d.querySelector('[data-act="del"]').onclick = () => { notes.items.splice(i, 1); renderNotes(); };
+    c.appendChild(d);
+  });
+  $("pTopic").innerHTML = `<option value="all">All topics</option>` + notes.items.map((it, i) => `<option value="${i}">${i + 1}. ${esc(it.q.slice(0, 50))}</option>`).join("");
+  $("saveBtn").disabled = isSample;
+}
+const itemSpeech = it => [it.q, it.short, ...it.points, it.trick ? "Memory trick. " + it.trick.replace(/-/g, " ") : ""].filter(Boolean).join(". ");
+
+$("goBtn").onclick = () => {
+  const st = $("status"); st.classList.remove("err");
+  const t = $("src").value.trim();
+  if (t.length < 20) { st.textContent = "Add some notes first: upload a photo or PDF, or paste text."; st.classList.add("err"); return; }
+  notes = makeNotes(t, +$("len").value); isSample = false; editing = false; $("editBtn").textContent = "Edit notes";
+  renderNotes(); $("practice").innerHTML = ""; $("score").classList.add("hidden");
+  st.textContent = notes.items.length ? `Done! ${notes.items.length} short note${notes.items.length === 1 ? "" : "s"} ready. Tap Edit notes to fix anything.` : "Couldn't find answers in that text. Put each question on its own line.";
+  $("h-out").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+$("editBtn").onclick = () => { editing = !editing; $("editBtn").textContent = editing ? "Done editing" : "Edit notes"; if (!editing) notes.items.forEach(it => { it.points = it.points.filter(p => p && p !== "New point"); }); renderNotes(); };
+
+/* =========================================================
+   4. Read aloud (built into the browser)
+   ========================================================= */
+const synth = window.speechSynthesis;
+let voices = [];
+const vScore = v => (v.lang === "en-IN" ? 5 : 0) + (v.lang?.startsWith("hi") ? 4 : 0) + (v.lang?.startsWith("en") ? 2 : 0);
+function loadVoices(){
+  voices = synth.getVoices();
+  const sel = $("voice"), cur = sel.value;
+  sel.innerHTML = [...voices].sort((a, b) => vScore(b) - vScore(a)).map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join("") || "<option>Default voice</option>";
+  if (cur && voices.some(v => v.name === cur)) sel.value = cur;
+}
+if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; } else { $("readAll").disabled = true; $("voice").classList.add("hidden"); }
+function clearSpeaking(){ document.querySelectorAll(".speaking").forEach(e => e.classList.remove("speaking")); }
+function speakQueue(list){
+  if (!synth) return;
+  synth.cancel(); clearSpeaking(); $("stopRead").classList.remove("hidden");
+  /* Chrome stops long speech after ~15s, so speak one sentence at a time */
+  const parts = [];
+  list.forEach(({ text, el }) => String(text).replace(/_{2,}/g, " blank ").replace(/([.!?।])\s+/g, "$1\u0001").split("\u0001").forEach(t => { if (t.trim()) parts.push({ text: t, el }); }));
+  list = parts;
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { clearSpeaking(); $("stopRead").classList.add("hidden"); return; }
+    const { text, el } = list[i++];
+    if (!el || !el.classList.contains("speaking")) clearSpeaking();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = voices.find(v => v.name === $("voice").value); if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = parseFloat($("rate").value);
+    if (el && !el.classList.contains("speaking")) { el.classList.add("speaking"); el.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    u.onend = next; u.onerror = next; synth.speak(u);
+  };
+  next();
+}
+$("readAll").onclick = () => speakQueue(notes.items.map((it, i) => ({ text: `Number ${i + 1}. ` + itemSpeech(it), el: $("card-" + i) })));
+$("stopRead").onclick = () => { synth?.cancel(); clearSpeaking(); $("stopRead").classList.add("hidden"); };
+
+/* =========================================================
+   5. Flash cards, copy, print, save
+   ========================================================= */
+let fi = 0, fBack = false;
+function renderFlash(){
+  const it = notes.items[fi]; if (!it) return;
+  $("flashCount").textContent = `Card ${fi + 1} of ${notes.items.length} · ${fBack ? "Answer" : "Say the answer first, then flip"}`;
+  const fc = $("flashcard"); fc.classList.toggle("back", fBack);
+  fc.innerHTML = fBack ? `<div style="display:grid;gap:8px;text-align:left"><b>${esc(it.short)}</b>${it.points.length ? `<ul style="margin:0;padding-left:20px">${it.points.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}${it.trick ? `<div class="trick">${esc(it.trick)}</div>` : ""}</div>` : `<b>${esc(it.q)}</b>`;
+}
+$("flashBtn").onclick = () => { if (!notes.items.length) return; fi = 0; fBack = false; $("cards").classList.add("hidden"); $("flash").classList.remove("hidden"); renderFlash(); };
+$("fClose").onclick = () => { $("flash").classList.add("hidden"); $("cards").classList.remove("hidden"); };
+$("fFlip").onclick = $("flashcard").onclick = () => { fBack = !fBack; renderFlash(); };
+$("flashcard").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fBack = !fBack; renderFlash(); } };
+$("fNext").onclick = () => { fi = (fi + 1) % notes.items.length; fBack = false; renderFlash(); };
+$("fPrev").onclick = () => { fi = (fi - 1 + notes.items.length) % notes.items.length; fBack = false; renderFlash(); };
+$("fRead").onclick = () => { const it = notes.items[fi]; speakQueue([{ text: fBack ? [it.short, ...it.points].join(". ") : it.q }]); };
+
+$("copyBtn").onclick = async e => {
+  const b = e.currentTarget;
+  const s = notes.title + "\n\n" + notes.items.map((it, i) => `${i + 1}. ${it.q}\n   ${it.short}\n${it.points.map(p => "   • " + p).join("\n")}${it.trick ? "\n   Trick: " + it.trick : ""}`).join("\n\n");
+  let ok = false;
+  try { await navigator.clipboard.writeText(s); ok = true; } catch {
+    const ta = document.createElement("textarea"); ta.value = s; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand("copy"); } catch {} ta.remove();
+  }
+  b.textContent = ok ? "Copied!" : "Couldn't copy";
+  setTimeout(() => b.textContent = "Copy", 1800);
+};
+$("printBtn").onclick = () => { try { window.print(); } catch {} };
+
+const KEY = "examBuddyOffline.v1";
+const getSaved = () => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
+const setSaved = a => { try { localStorage.setItem(KEY, JSON.stringify(a)); return true; } catch { return false; } };
+function renderSaved(){
+  const a = getSaved(); $("savedWrap").classList.toggle("hidden", !a.length);
+  const l = $("savedList"); l.innerHTML = "";
+  a.forEach((n, i) => {
+    const row = document.createElement("div"); row.className = "saved-item";
+    row.innerHTML = `<button class="link">${esc(n.title)} · ${n.items.length} notes${n.savedOn ? " · " + esc(n.savedOn) : ""}</button><button class="iconbtn">Delete</button>`;
+    row.children[0].onclick = () => { notes = JSON.parse(JSON.stringify(n)); isSample = false; buildCaseMap(notes.items.map(it => [it.q, it.short, ...it.points].join(" ")).join(" ")); renderNotes(); $("practice").innerHTML = ""; $("score").classList.add("hidden"); };
+    row.children[1].onclick = () => { const b = getSaved(); b.splice(i, 1); setSaved(b); renderSaved(); };
+    l.appendChild(row);
+  });
+}
+$("saveBtn").onclick = e => {
+  if (isSample) return;
+  if (!notes.savedId) notes.savedId = Date.now();
+  const a = getSaved().filter(n => n.savedId !== notes.savedId);
+  a.unshift({ ...notes, savedOn: new Date().toLocaleDateString() });
+  const b = e.currentTarget; b.textContent = setSaved(a.slice(0, 40)) ? "Saved!" : "Couldn't save";
+  renderSaved(); setTimeout(() => b.textContent = "Save", 1800);
+};
+
+/* =========================================================
+   6. Practice questions (made from the notes by rules)
+   ========================================================= */
+let caseMap = {};
+function buildCaseMap(text){
+  caseMap = {};
+  (text.match(/[A-Za-z\u0900-\u097F][\w\u0900-\u097F\-₂₃]*(?:\s[A-Za-z][\w\-₂₃]*)?/g) || []).forEach(m => {
+    [m, m.split(" ")[0]].forEach(x => { const k = x.toLowerCase(); if (!caseMap[k] || /[A-Z].*[A-Z0-9]/.test(x)) caseMap[k] = x; });
+  });
+}
+const nice = k => { const c = caseMap[String(k).toLowerCase()]; return c && (/[A-Z].*[A-Z]/.test(c) || /\d|₂|₃/.test(c)) ? c : cap(String(k)); };
+function blankable(sentence, pool){
+  const low = sentence.toLowerCase();
+  const ordered = pool.length > 2 ? [...shuffle(pool.slice(0, 2)), ...pool.slice(2)] : shuffle(pool);
+  const k = ordered.find(k => k.length > 2 && new RegExp("\\b" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(low));
+  if (!k) return null;
+  const r = new RegExp("\\b" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i");
+  const actual = sentence.match(r)[0];
+  const rAll = new RegExp("\\b" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "gi");
+  return { text: sentence.replace(rAll, "________"), answer: actual };
+}
+function negate(s){
+  const swaps = [[/\bis not\b/i, "is"], [/\bare not\b/i, "are"], [/\bcannot\b/i, "can"], [/\bis\b/i, "is not"], [/\bare\b/i, "are not"], [/\bcan\b/i, "cannot"], [/\bhas\b/i, "does not have"], [/\bhave\b/i, "do not have"], [/\bincreases\b/i, "decreases"], [/\bdecreases\b/i, "increases"], [/\babsorbs\b/i, "releases"], [/\breleases\b/i, "absorbs"]];
+  for (const [r, w] of swaps) if (r.test(s)) return s.replace(r, w);
+  return null;
+}
+function makeQuestions(items, allKw, type, n){
+  const qs = [];
+  const facts = items.flatMap(it => [it.short, ...it.points].filter(s => s && s.split(" ").length >= 4).map(s => ({ s, it })));
+  const gens = {
+    fill: () => { const f = pick(facts); const b = f && blankable(f.s, f.it.keywords.length ? f.it.keywords : allKw); return b && { type: "fill", q: b.text, answer: b.answer, explain: f.s }; },
+    mcq: () => {
+      const f = pick(facts); const b = f && blankable(f.s, f.it.keywords.length ? f.it.keywords : allKw); if (!b) return null;
+      const al = b.answer.toLowerCase();
+      const ownFirst = [...shuffle(f.it.keywords), ...shuffle(allKw)];
+      const wrong = [...new Set(ownFirst.filter(k => { const kl = k.toLowerCase(); return kl !== al && !kl.includes(al) && !al.includes(kl) && !f.s.toLowerCase().includes(kl) && kl.replace(/s$/, "") !== al.replace(/s$/, ""); }))].slice(0, 3);
+      if (wrong.length < 3) return null;
+      return { type: "mcq", q: b.text, options: shuffle([al, ...wrong]).map(nice), answer: nice(al), explain: f.s };
+    },
+    tf: () => {
+      const f = pick(facts); if (!f) return null;
+      if (Math.random() < 0.5) return { type: "tf", q: f.s + ".", answer: "True", explain: f.s };
+      let wrongS = null;
+      const own = f.it.keywords.find(k => f.s.toLowerCase().includes(k));
+      const other = own && shuffle(allKw.filter(k => k !== own && !f.s.toLowerCase().includes(k)))[0];
+      wrongS = negate(f.s);
+      if ((!wrongS || Math.random() < 0.35) && own && other) wrongS = f.s.replace(new RegExp(own.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), nice(other));
+      return wrongS && { type: "tf", q: wrongS + ".", answer: "False", explain: "Correct: " + f.s + "." };
+    },
+    short: () => { const it = pick(items); return it && { type: "short", q: it.q, answer: [it.short, ...it.points].join(" • "), explain: it.trick }; },
+    match: () => {
+      const pairs = shuffle(items.filter(it => it.keywords[0] && it.short)).slice(0, 4).map(it => ({ left: cap(it.keywords[0]), right: it.short }));
+      const uniq = pairs.filter((p, i) => pairs.findIndex(x => x.left === p.left) === i);
+      if (uniq.length < 3) return null;
+      return { type: "match", q: "Match each word with the right line.", pairs: uniq.map(p => ({ ...p, left: nice(p.left) })) };
+    }
+  };
+  const order = type === "mix" ? ["mcq", "fill", "tf", "short", "mcq", "fill", "tf", "match"] : [type];
+  const seen = new Set(); let tries = 0;
+  while (qs.length < n && tries < n * 30) {
+    tries++;
+    const g = order[qs.length % order.length];
+    const q = gens[g]?.();
+    if (!q) continue;
+    const key = q.type + q.q;
+    if (seen.has(key)) continue;
+    if (q.type === "match" && qs.some(x => x.type === "match")) continue;
+    seen.add(key); qs.push(q);
+  }
+  return qs;
+}
+let right = 0, answered = 0, auto = 0;
+function makePractice(){
+  const st = $("pStatus"); st.classList.remove("err");
+  const t = $("pTopic").value;
+  const items = t === "all" ? notes.items : [notes.items[+t]];
+  const allKw = [...new Set(notes.items.flatMap(it => it.keywords))];
+  let qs = makeQuestions(items, allKw, $("pType").value, +$("pCount").value);
+  if (!qs.length && $("pType").value !== "short") qs = makeQuestions(items, allKw, "mix", +$("pCount").value);
+  if (!qs.length) { st.textContent = "Not enough notes to make questions. Add more text."; st.classList.add("err"); return; }
+  st.textContent = qs.length < +$("pCount").value ? `Made ${qs.length} questions from these notes. Add more notes for more variety.` : "Tap an answer, or think first and tap Show answer.";
+  $("practiceBtn").textContent = "New questions";
+  renderPractice(qs);
+}
+$("practiceBtn").onclick = makePractice;
+function updateScore(){
+  const s = $("score"); if (!auto) { s.classList.add("hidden"); return; }
+  s.classList.remove("hidden");
+  s.textContent = answered === auto ? `Score: ${right} / ${auto}${right === auto ? " · Perfect!" : right >= auto * 0.7 ? " · Great work!" : " · Read the notes once more, then tap New questions."}` : `Score so far: ${right} / ${answered} · ${auto - answered} left to answer`;
+}
+function renderPractice(qs){
+  right = 0; answered = 0; auto = qs.filter(q => q.type === "mcq" || q.type === "tf" || q.type === "fill" || q.type === "match").length; updateScore();
+  const box = $("practice"); box.innerHTML = "";
+  const label = { mcq: "MCQ", fill: "Fill in the blank", tf: "True or False", short: "Write the answer", match: "Match the following" };
+  const norm = s => String(s).toLowerCase().replace(/[^a-z0-9ऀ-ॿ]/g, "");
+  qs.forEach((q, i) => {
+    const d = document.createElement("div"); d.className = "practice-q";
+    let body = "";
+    const opts = q.type === "mcq" ? q.options : q.type === "tf" ? ["True", "False"] : null;
+    if (opts) body = `<div class="opts">${opts.map(o => `<button class="opt">${esc(o)}</button>`).join("")}</div>`;
+    if (q.type === "fill") body = `<div class="toolbar"><input type="text" aria-label="Your answer" placeholder="Type the missing word" style="max-width:260px"><button class="btn sm" data-a="check">Check</button></div>`;
+    if (q.type === "match") {
+      const rights = shuffle(q.pairs.map(p => p.right));
+      body = `<div class="match">${q.pairs.map((p, j) => `<div><b>${esc(p.left)}</b></div><select data-j="${j}" aria-label="Match for ${esc(p.left)}"><option value="">Choose…</option>${rights.map(r => `<option>${esc(r)}</option>`).join("")}</select>`).join("")}</div><div><button class="btn sm" data-a="mcheck">Check</button></div>`;
+    }
+    const ansHtml = q.type === "match" ? q.pairs.map(p => `<b>${esc(p.left)}</b> → ${esc(p.right)}`).join("<br>") : `<b>Answer:</b> ${esc(q.answer)}${q.explain && q.explain !== q.answer ? `<br>${esc(q.explain)}` : ""}`;
+    d.innerHTML = `<div class="qtype">Q${i + 1} · ${label[q.type]}</div><div class="qtext">${esc(q.q)}</div>${body}
+      <div class="card-actions"><button class="iconbtn" data-a="show">Show answer</button><button class="iconbtn" data-a="read">Read aloud</button></div>
+      <div class="answer hidden">${ansHtml}</div>`;
+    const ans = d.querySelector(".answer");
+    const done = ok => { if (d.dataset.done) return false; d.dataset.done = "1"; answered++; if (ok) right++; ans.classList.remove("hidden"); updateScore(); return true; };
+    if (opts) d.querySelectorAll(".opt").forEach(b => b.onclick = () => {
+      if (d.dataset.done) return;
+      const ok = norm(b.textContent) === norm(q.answer);
+      b.classList.add(ok ? "right" : "wrong");
+      d.querySelectorAll(".opt").forEach(o => { if (norm(o.textContent) === norm(q.answer)) o.classList.add("right"); });
+      done(ok);
+    });
+    if (q.type === "fill") {
+      const inp = d.querySelector("input");
+      const check = () => { const ok = norm(inp.value) === norm(q.answer); inp.style.borderColor = ok ? "var(--good)" : "var(--bad)"; done(ok); };
+      d.querySelector('[data-a="check"]').onclick = check;
+      inp.onkeydown = e => { if (e.key === "Enter") check(); };
+    }
+    if (q.type === "match") d.querySelector('[data-a="mcheck"]').onclick = () => {
+      let all = true;
+      d.querySelectorAll("select").forEach(s => { const ok = s.value === q.pairs[+s.dataset.j].right; s.style.borderColor = ok ? "var(--good)" : "var(--bad)"; if (!ok) all = false; });
+      done(all);
+    };
+    d.querySelector('[data-a="show"]').onclick = () => ans.classList.toggle("hidden");
+    d.querySelector('[data-a="read"]').onclick = () => speakQueue([{ text: q.q.replace(/_+/g, " blank ") + (opts ? ". Options: " + opts.join(", ") : "") }]);
+    box.appendChild(d);
+  });
+}
+
+/* start with a clearly marked example */
+$("src").value = SAMPLE_TEXT;
+notes = makeNotes(SAMPLE_TEXT, 3); isSample = true;
+renderNotes(); renderSaved();
+window.__test = { makeNotes, makeQuestions };
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+
+/* installable app + offline */
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("installBtn").classList.remove("hidden"); });
+window.addEventListener("appinstalled", () => $("installBtn").classList.add("hidden"));
+$("installBtn").onclick = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch {} installEvt = null; $("installBtn").classList.add("hidden"); };
+
+})();
+</script>
+</body>
+</html>
